@@ -1,0 +1,55 @@
+name: Deploy landings to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Refresh Yandex reviews
+        continue-on-error: true
+        run: |
+          python3 tools/fetch_reviews.py reviews.json || echo "Отзывы не обновились, останется встроенная копия"
+
+      - name: Collect site
+        run: |
+          mkdir -p _site
+          cp thanks.html thanks-anush.html robots.txt favicon.ico _site/
+          cp all-on-4.html implants.html veneers.html _site/
+          cp thanks-all-on-4.html thanks-implants.html thanks-veneers.html _site/
+          cp reviews.json _site/ 2>/dev/null || true
+          cp -r certs _site/
+          cp CNAME _site/ 2>/dev/null || echo "CNAME нет — сайт отдаётся по адресу github.io"
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
